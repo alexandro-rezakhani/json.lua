@@ -2,7 +2,6 @@
 -- json.lua
 --
 -- Copyright (c) 2020 rxi
--- Copyright (c) 2020 alexandro-rezakhani
 --
 -- Permission is hereby granted, free of charge, to any person obtaining a copy of
 -- this software and associated documentation files (the "Software"), to deal in
@@ -23,7 +22,7 @@
 -- SOFTWARE.
 --
 
-local json = { _version = "0.1.2fix" }
+local json = { _version = "0.1.2" }
 
 -------------------------------------------------------------------------------
 -- Encode
@@ -65,30 +64,22 @@ local function encode_table(val, stack)
   if stack[val] then error("circular reference") end
 
   stack[val] = true
-  -- Check whether to treat as a array or object
-  local array = true
-  local length = 0
-	local nLen = 0
-  for k,v in pairs(val) do
-		if (type(k) ~= "number" or k<=0) and not (k == "n" and type(v) == "number") then
-			array = nil
-			break	-- Treat as object
-		else
-			if k > length then 
-				length = k
-			end
-			if k == "n" and type(v) == "number" then
-				nLen = v
-			end
-		end
-  end
-  if array then
-		if nLen > length then
-			length = nLen
-		end
+
+  if rawget(val, 1) ~= nil or next(val) == nil then
+    -- Treat as array -- check keys are valid and it is not sparse
+    local n = 0
+    for k in pairs(val) do
+      if type(k) ~= "number" then
+        error("invalid table: mixed or invalid key types")
+      end
+      n = n + 1
+    end
+    if n ~= #val then
+      error("invalid table: sparse array")
+    end
     -- Encode
-    for i=1,length do
-      table.insert(res, encode(val[i], stack))
+    for i, v in ipairs(val) do
+      table.insert(res, encode(v, stack))
     end
     stack[val] = nil
     return "[" .. table.concat(res, ",") .. "]"
@@ -96,13 +87,10 @@ local function encode_table(val, stack)
   else
     -- Treat as an object
     for k, v in pairs(val) do
-      if type(k) == "string" then
-        res[#res + 1] = encode(k, stack) .. ":" .. encode(v, stack)
-      elseif type(k) == "number" then
-        res[#res + 1] = encode(string.format(k), stack) .. ":" .. encode(v, stack)
-      else
-        error("invalid table: mixed or invalid key types");
+      if type(k) ~= "string" then
+        error("invalid table: mixed or invalid key types")
       end
+      table.insert(res, encode(k, stack) .. ":" .. encode(v, stack))
     end
     stack[val] = nil
     return "{" .. table.concat(res, ",") .. "}"
@@ -120,12 +108,7 @@ local function encode_number(val)
   if val ~= val or val <= -math.huge or val >= math.huge then
     error("unexpected number value '" .. tostring(val) .. "'")
   end
-  local intVal = math.tointeger(val)
-  if intVal == val then
-    return string.format("%d", intVal)
-  else
-    return string.format("%.14g", val)
-  end
+  return string.format("%.14g", val)
 end
 
 
